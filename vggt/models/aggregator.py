@@ -188,7 +188,7 @@ class Aggregator(nn.Module):
         
         # Cách unpack an toàn: lấy 4 giá trị cuối cùng
         # Điều này giúp code không crash dù images là 4D hay 5D
-        *leading_dims, C, H, W = images.shape
+        B, S, C, H, W = images.shape
         print("1")
         S_total = images.numel() // (C * H * W) 
         print(S_total)
