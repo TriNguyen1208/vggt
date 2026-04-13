@@ -240,7 +240,7 @@ class Aggregator(nn.Module):
                 and the patch_start_idx indicating where patch tokens begin.
         """
         B, S, C_in, H, W = images.shape
-
+        print(B, S, C_in, H, W)
         if C_in != 3:
             raise ValueError(f"Expected 3 input channels, got {C_in}")
 
