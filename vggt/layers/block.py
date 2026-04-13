@@ -58,7 +58,7 @@ class Block(nn.Module):
             proj_drop=drop,
             qk_norm=qk_norm,
             fused_attn=fused_attn,
-            rope=rope,
+            rope=rope
         )
 
         self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
@@ -74,9 +74,15 @@ class Block(nn.Module):
 
         self.sample_drop_ratio = drop_path
 
-    def forward(self, x: Tensor, pos=None) -> Tensor:
-        def attn_residual_func(x: Tensor, pos=None) -> Tensor:
-            return self.ls1(self.attn(self.norm1(x), pos=pos))
+    def forward(self, x: Tensor, pos=None, attn_mask=None) -> Tensor:
+        def attn_residual_func(x: Tensor, pos=None, attn_mask=None) -> Tensor:
+            return self.ls1(
+                self.attn(
+                    self.norm1(x),
+                    pos=pos,
+                    attn_mask=attn_mask
+                )
+            )
 
         def ffn_residual_func(x: Tensor) -> Tensor:
             return self.ls2(self.mlp(self.norm2(x)))
@@ -93,7 +99,7 @@ class Block(nn.Module):
             x = x + self.drop_path1(attn_residual_func(x, pos=pos))
             x = x + self.drop_path1(ffn_residual_func(x))  # FIXME: drop_path2
         else:
-            x = x + attn_residual_func(x, pos=pos)
+            x = x + attn_residual_func(x, pos=pos, attn_mask=attn_mask)
             x = x + ffn_residual_func(x)
         return x
 
