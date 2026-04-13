@@ -22,13 +22,19 @@ class YoloSegment:
 
         images = images.view(B * S, C, H, W)
         
-        imgs_np = [
-            (img.permute(1,2,0).cpu().numpy() * 255).astype(np.uint8)
-            for img in images
-        ]
+        # convert to uint8 HWC (YOLO-safe)
+        imgs_np = []
+        for img in images:
+            img = img.detach().cpu()
 
+            img = img.permute(1, 2, 0).numpy()
+            img = (img * 255).clip(0, 255).astype(np.uint8)
+
+            imgs_np.append(np.ascontiguousarray(img))
+
+        # 🔥 IMPORTANT FIX: avoid batch numpy bug
         results = self.model.predict(
-            source=imgs_np,
+            source=imgs_np,   # list is OK now
             conf=0.5,
             task="segment",
             verbose=False
