@@ -22,23 +22,31 @@ class YoloSegment:
 
         images = images.view(B * S, C, H, W)
         
-        # convert to uint8 HWC (YOLO-safe)
-        imgs_np = []
+        results = []
+
+        # =========================
+        # 🔥 SAFE INFERENCE LOOP
+        # =========================
         for img in images:
             img = img.detach().cpu()
 
+            # CHW -> HWC
             img = img.permute(1, 2, 0).numpy()
+
+            # float [0,1] -> uint8 [0,255]
             img = (img * 255).clip(0, 255).astype(np.uint8)
 
-            imgs_np.append(np.ascontiguousarray(img))
+            img = np.ascontiguousarray(img)
 
-        # 🔥 IMPORTANT FIX: avoid batch numpy bug
-        results = self.model.predict(
-            source=imgs_np,   # list is OK now
-            conf=0.5,
-            task="segment",
-            verbose=False
-        )
+            # 🚨 IMPORTANT: single image inference (NO batch list)
+            result = self.model.predict(
+                source=img,
+                conf=0.5,
+                task="segment",
+                verbose=False
+            )[0]
+
+            results.append(result)
 
         fg_masks = []
         for result in results:
