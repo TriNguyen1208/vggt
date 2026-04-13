@@ -181,7 +181,42 @@ class Aggregator(nn.Module):
             if hasattr(self.patch_embed, "mask_token"):
                 self.patch_embed.mask_token.requires_grad_(False)
 
-    def forward(self, images: torch.Tensor) -> Tuple[List[torch.Tensor], int]:
+    def __get_mask_attention(self, images: torch.Tensor, fg_mask: torch.Tensor):
+        B, S, _, H, W = images.shape
+
+        # (B*S, H, W)
+        fg_mask = fg_mask.view(B * S, H, W).float()
+
+        ph, pw = H // self.patch_size, W // self.patch_size
+
+        # 🔥 reshape pixel → patch WITHOUT pooling
+        fg_mask = fg_mask.view(
+            B * S,
+            ph,
+            self.patch_size,
+            pw,
+            self.patch_size
+        )
+
+        # OR pooling inside patch (object if ANY pixel is object)
+        fg_mask = fg_mask.any(dim=(2, 4))  # (B*S, ph, pw)
+
+        # flatten patches
+        fg_mask = fg_mask.view(B * S, -1)  # (B*S, P)
+
+        # special tokens (camera/register always kept)
+        special = torch.ones(
+            B * S,
+            self.patch_start_idx,
+            device=fg_mask.device
+        )
+
+        # final mask
+        attn_mask = torch.cat([special, fg_mask], dim=1)  # (B*S, P_total)
+
+        return attn_mask
+    
+    def forward(self, images: torch.Tensor, fg_mask: torch.Tensor) -> Tuple[List[torch.Tensor], int]:
         """
         Args:
             images (torch.Tensor): Input images with shape [B, S, 3, H, W], in range [0, 1].
@@ -203,6 +238,11 @@ class Aggregator(nn.Module):
         # Reshape to [B*S, C, H, W] for patch embedding
         images = images.view(B * S, C_in, H, W)
         patch_tokens = self.patch_embed(images)
+
+
+        attn_mask = None
+        if fg_mask is not None:
+            attn_mask = self.__get_mask_attention(images, fg_mask)
 
         if isinstance(patch_tokens, dict):
             patch_tokens = patch_tokens["x_norm_patchtokens"]
@@ -238,11 +278,11 @@ class Aggregator(nn.Module):
             for attn_type in self.aa_order:
                 if attn_type == "frame":
                     tokens, frame_idx, frame_intermediates = self._process_frame_attention(
-                        tokens, B, S, P, C, frame_idx, pos=pos
+                        tokens, B, S, P, C, frame_idx, pos=pos, attn_mask=attn_mask
                     )
                 elif attn_type == "global":
                     tokens, global_idx, global_intermediates = self._process_global_attention(
-                        tokens, B, S, P, C, global_idx, pos=pos
+                        tokens, B, S, P, C, global_idx, pos=pos, attn_mask=attn_mask
                     )
                 else:
                     raise ValueError(f"Unknown attention type: {attn_type}")
@@ -257,7 +297,7 @@ class Aggregator(nn.Module):
         del global_intermediates
         return output_list, self.patch_start_idx
 
-    def _process_frame_attention(self, tokens, B, S, P, C, frame_idx, pos=None):
+    def _process_frame_attention(self, tokens, B, S, P, C, frame_idx, pos=None, attn_mask=None):
         """
         Process frame attention blocks. We keep tokens in shape (B*S, P, C).
         """
@@ -275,13 +315,16 @@ class Aggregator(nn.Module):
             if self.training:
                 tokens = checkpoint(self.frame_blocks[frame_idx], tokens, pos, use_reentrant=self.use_reentrant)
             else:
-                tokens = self.frame_blocks[frame_idx](tokens, pos=pos)
+                if attn_mask is not None:
+                    tokens = self.frame_blocks[frame_idx](tokens, pos=pos, attn_mask=attn_mask)
+                else:
+                    tokens = self.frame_blocks[frame_idx](tokens, pos=pos)
             frame_idx += 1
             intermediates.append(tokens.view(B, S, P, C))
 
         return tokens, frame_idx, intermediates
 
-    def _process_global_attention(self, tokens, B, S, P, C, global_idx, pos=None):
+    def _process_global_attention(self, tokens, B, S, P, C, global_idx, pos=None, attn_mask=None):
         """
         Process global attention blocks. We keep tokens in shape (B, S*P, C).
         """
@@ -296,9 +339,12 @@ class Aggregator(nn.Module):
         # by default, self.aa_block_size=1, which processes one block at a time
         for _ in range(self.aa_block_size):
             if self.training:
-                tokens = checkpoint(self.global_blocks[global_idx], tokens, pos, use_reentrant=self.use_reentrant)
+                tokens = checkpoint(self.global_blocks[global_idx], tokens, pos, use_reentrant=self.use_reentrant, attn_mask = attn_mask)
             else:
-                tokens = self.global_blocks[global_idx](tokens, pos=pos)
+                if attn_mask is not None:
+                    tokens = self.global_blocks[global_idx](tokens, pos=pos, attn_mask=attn_mask)
+                else:
+                    tokens = self.global_blocks[global_idx](tokens, pos=pos)
             global_idx += 1
             intermediates.append(tokens.view(B, S, P, C))
 

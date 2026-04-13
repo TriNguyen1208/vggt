@@ -222,9 +222,6 @@ def load_and_preprocess_images(image_path_list, mode="crop"):
     images = torch.stack(images)  # concatenate images
 
     # Ensure correct shape when single image
-    if len(image_path_list) == 1:
-        # Verify shape is (1, C, H, W)
-        if images.dim() == 3:
-            images = images.unsqueeze(0)
 
-    return images
+
+def load_fore
