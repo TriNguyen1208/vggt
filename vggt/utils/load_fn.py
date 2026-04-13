@@ -222,6 +222,3 @@ def load_and_preprocess_images(image_path_list, mode="crop"):
     images = torch.stack(images)  # concatenate images
 
     # Ensure correct shape when single image
-
-
-def load_fore
