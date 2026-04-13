@@ -52,10 +52,6 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
                 - vis (torch.Tensor): Visibility scores for tracked points with shape [B, S, N]
                 - conf (torch.Tensor): Confidence scores for tracked points with shape [B, S, N]
         """       
-        import logging
-        logging.basicConfig(level=logging.INFO)
-
-        logging.info(f"Hello") 
         # If wihout batch dimension, add it
         if len(images.shape) == 4:
             images = images.unsqueeze(0)

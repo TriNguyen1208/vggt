@@ -182,13 +182,14 @@ class Aggregator(nn.Module):
                 self.patch_embed.mask_token.requires_grad_(False)
 
     def __get_mask_attention(self, images: torch.Tensor, fg_mask: torch.Tensor):
-        print("0")
         # images: (B*S, C, H, W) hoặc (B, S, C, H, W)
         # fg_mask: (1, S, H, W) hoặc (B, S, H, W)
         
         # Cách unpack an toàn: lấy 4 giá trị cuối cùng
         # Điều này giúp code không crash dù images là 4D hay 5D
+        print(images.shape)
         B, S, C, H, W = images.shape
+
         print("1")
         S_total = images.numel() // (C * H * W) 
         print(S_total)
