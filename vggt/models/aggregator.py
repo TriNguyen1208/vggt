@@ -182,6 +182,7 @@ class Aggregator(nn.Module):
                 self.patch_embed.mask_token.requires_grad_(False)
 
     def __get_mask_attention(self, images: torch.Tensor, fg_mask: torch.Tensor):
+        print("0")
         # images: (B*S, C, H, W) hoặc (B, S, C, H, W)
         # fg_mask: (1, S, H, W) hoặc (B, S, H, W)
         
