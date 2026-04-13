@@ -188,12 +188,13 @@ class Aggregator(nn.Module):
         # Cách unpack an toàn: lấy 4 giá trị cuối cùng
         # Điều này giúp code không crash dù images là 4D hay 5D
         *leading_dims, C, H, W = images.shape
+        print("1")
         S_total = images.numel() // (C * H * W) 
-        
+        print(S_total)
         # Ép fg_mask về đúng (S_total, H, W) để tính toán patch
         # dùng reshape thay vì view để an toàn hơn với bộ nhớ
         fg_mask = fg_mask.reshape(S_total, H, W).float()
-
+        print("2")
         ph, pw = H // self.patch_size, W // self.patch_size
 
         # Reshape pixel → patch (5D)
@@ -205,13 +206,13 @@ class Aggregator(nn.Module):
             pw,
             self.patch_size
         )
-
+        print("3")
         # Pooling: Nếu bất kỳ pixel nào trong patch là vật thể (True), cả patch đó là 1
         fg_mask = fg_mask.any(dim=(2, 4))  # Kết quả: (S_total, ph, pw)
-
+        print("4")
         # Flatten patches thành sequence
         fg_mask = fg_mask.reshape(S_total, -1)  # (S_total, P)
-
+        print("5")
         # Tạo mask cho các special tokens (ví dụ: [CLS], register tokens)
         # self.patch_start_idx thường là số lượng special tokens
         special = torch.ones(
@@ -220,10 +221,10 @@ class Aggregator(nn.Module):
             device=fg_mask.device,
             dtype=fg_mask.dtype
         )
-
+        print('6')
         # Ghép lại thành mask hoàn chỉnh cho Attention
         attn_mask = torch.cat([special, fg_mask], dim=1)  # (S_total, P_total)
-
+        print('7')
         return attn_mask
     
     def forward(self, images: torch.Tensor, fg_mask: torch.Tensor) -> Tuple[List[torch.Tensor], int]:
