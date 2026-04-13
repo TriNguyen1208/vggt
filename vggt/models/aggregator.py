@@ -182,15 +182,23 @@ class Aggregator(nn.Module):
                 self.patch_embed.mask_token.requires_grad_(False)
 
     def __get_mask_attention(self, images: torch.Tensor, fg_mask: torch.Tensor):
-        S_total, C, H, W = images.shape
-
-        # (B*S, H, W)
-        fg_mask = fg_mask.view(S_total, H, W).float()
+        # images: (B*S, C, H, W) hoặc (B, S, C, H, W)
+        # fg_mask: (1, S, H, W) hoặc (B, S, H, W)
+        
+        # Cách unpack an toàn: lấy 4 giá trị cuối cùng
+        # Điều này giúp code không crash dù images là 4D hay 5D
+        *leading_dims, C, H, W = images.shape
+        S_total = images.numel() // (C * H * W) 
+        
+        # Ép fg_mask về đúng (S_total, H, W) để tính toán patch
+        # dùng reshape thay vì view để an toàn hơn với bộ nhớ
+        fg_mask = fg_mask.reshape(S_total, H, W).float()
 
         ph, pw = H // self.patch_size, W // self.patch_size
 
-        # 🔥 reshape pixel → patch WITHOUT pooling
-        fg_mask = fg_mask.view(
+        # Reshape pixel → patch (5D)
+        # Đảm bảo H và W chia hết cho patch_size
+        fg_mask = fg_mask.reshape(
             S_total,
             ph,
             self.patch_size,
@@ -198,21 +206,23 @@ class Aggregator(nn.Module):
             self.patch_size
         )
 
-        # OR pooling inside patch (object if ANY pixel is object)
-        fg_mask = fg_mask.any(dim=(2, 4))  # (B*S, ph, pw)
+        # Pooling: Nếu bất kỳ pixel nào trong patch là vật thể (True), cả patch đó là 1
+        fg_mask = fg_mask.any(dim=(2, 4))  # Kết quả: (S_total, ph, pw)
 
-        # flatten patches
-        fg_mask = fg_mask.view(S_total, -1)  # (B*S, P)
+        # Flatten patches thành sequence
+        fg_mask = fg_mask.reshape(S_total, -1)  # (S_total, P)
 
-        # special tokens (camera/register always kept)
+        # Tạo mask cho các special tokens (ví dụ: [CLS], register tokens)
+        # self.patch_start_idx thường là số lượng special tokens
         special = torch.ones(
             S_total,
             self.patch_start_idx,
-            device=fg_mask.device
+            device=fg_mask.device,
+            dtype=fg_mask.dtype
         )
 
-        # final mask
-        attn_mask = torch.cat([special, fg_mask], dim=1)  # (B*S, P_total)
+        # Ghép lại thành mask hoàn chỉnh cho Attention
+        attn_mask = torch.cat([special, fg_mask], dim=1)  # (S_total, P_total)
 
         return attn_mask
     
@@ -236,7 +246,7 @@ class Aggregator(nn.Module):
         images = (images - self._resnet_mean) / self._resnet_std
 
         # Reshape to [B*S, C, H, W] for patch embedding
-        images = images.reshape(B * S, C_in, H, W)
+        images = images.view(B * S, C_in, H, W)
         patch_tokens = self.patch_embed(images)
 
 
