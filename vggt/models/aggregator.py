@@ -182,16 +182,16 @@ class Aggregator(nn.Module):
                 self.patch_embed.mask_token.requires_grad_(False)
 
     def __get_mask_attention(self, images: torch.Tensor, fg_mask: torch.Tensor):
-        B, S, _, H, W = images.shape
+        S_total, C, H, W = images.shape
 
         # (B*S, H, W)
-        fg_mask = fg_mask.view(B * S, H, W).float()
+        fg_mask = fg_mask.view(S_total, H, W).float()
 
         ph, pw = H // self.patch_size, W // self.patch_size
 
         # 🔥 reshape pixel → patch WITHOUT pooling
         fg_mask = fg_mask.view(
-            B * S,
+            S_total,
             ph,
             self.patch_size,
             pw,
@@ -202,11 +202,11 @@ class Aggregator(nn.Module):
         fg_mask = fg_mask.any(dim=(2, 4))  # (B*S, ph, pw)
 
         # flatten patches
-        fg_mask = fg_mask.view(B * S, -1)  # (B*S, P)
+        fg_mask = fg_mask.view(S_total, -1)  # (B*S, P)
 
         # special tokens (camera/register always kept)
         special = torch.ones(
-            B * S,
+            S_total,
             self.patch_start_idx,
             device=fg_mask.device
         )
