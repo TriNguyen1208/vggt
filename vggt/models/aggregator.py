@@ -187,7 +187,10 @@ class Aggregator(nn.Module):
         
         # Cách unpack an toàn: lấy 4 giá trị cuối cùng
         # Điều này giúp code không crash dù images là 4D hay 5D
-        print(images.shape)
+        import logging
+        logging.basicConfig(level=logging.INFO)
+
+        logging.info(f"Hello") 
         B, S, C, H, W = images.shape
 
         print("1")
@@ -240,6 +243,10 @@ class Aggregator(nn.Module):
                 The list of outputs from the attention blocks,
                 and the patch_start_idx indicating where patch tokens begin.
         """
+        import logging
+        logging.basicConfig(level=logging.INFO)
+
+        logging.info(f"{images.shape}") 
         B, S, C_in, H, W = images.shape
         import logging
         logging.basicConfig(level=logging.INFO)
