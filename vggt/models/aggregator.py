@@ -187,10 +187,14 @@ class Aggregator(nn.Module):
         
         # Cách unpack an toàn: lấy 4 giá trị cuối cùng
         # Điều này giúp code không crash dù images là 4D hay 5D
+        # import logging
+        # logging.basicConfig(level=logging.INFO)
+
+        # logging.info(f"Hello") 
         import logging
         logging.basicConfig(level=logging.INFO)
 
-        logging.info(f"Hello") 
+        logging.info(f"2. {images.shape}")
         B, S, C, H, W = images.shape
 
         print("1")
@@ -243,15 +247,7 @@ class Aggregator(nn.Module):
                 The list of outputs from the attention blocks,
                 and the patch_start_idx indicating where patch tokens begin.
         """
-        import logging
-        logging.basicConfig(level=logging.INFO)
-
-        logging.info(f"{images.shape}") 
         B, S, C_in, H, W = images.shape
-        import logging
-        logging.basicConfig(level=logging.INFO)
-
-        logging.info(f"{B}, {S}, {C_in}, {H}, {W}")
         if C_in != 3:
             raise ValueError(f"Expected 3 input channels, got {C_in}")
 
@@ -260,6 +256,10 @@ class Aggregator(nn.Module):
 
         # Reshape to [B*S, C, H, W] for patch embedding
         images = images.view(B * S, C_in, H, W)
+        import logging
+        logging.basicConfig(level=logging.INFO)
+
+        logging.info(f"1. {images.shape}")
         patch_tokens = self.patch_embed(images)
 
 
