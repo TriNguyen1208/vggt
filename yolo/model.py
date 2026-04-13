@@ -22,7 +22,10 @@ class YoloSegment:
 
         images = images.view(B * S, C, H, W)
         
-        imgs_np = images.permute(0, 2, 3, 1).cpu().numpy()
+        imgs_np = [
+            (img.permute(1,2,0).cpu().numpy() * 255).astype(np.uint8)
+            for img in images
+        ]
 
         results = self.model.predict(
             source=imgs_np,
