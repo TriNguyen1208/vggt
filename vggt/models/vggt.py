@@ -56,10 +56,6 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         # If wihout batch dimension, add it
         if len(images.shape) == 4:
             images = images.unsqueeze(0)
-        
-        if fg_mask is not None:
-            if len(fg_mask.shape) == 3:  # (S, H, W)
-                fg_mask = fg_mask.unsqueeze(0)  # → (1, S, H, W)
                 
         if query_points is not None and len(query_points.shape) == 2:
             query_points = query_points.unsqueeze(0)

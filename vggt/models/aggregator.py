@@ -182,58 +182,52 @@ class Aggregator(nn.Module):
                 self.patch_embed.mask_token.requires_grad_(False)
 
     def __get_mask_attention(self, images: torch.Tensor, fg_mask: torch.Tensor):
-        # images: (B*S, C, H, W) hoặc (B, S, C, H, W)
-        # fg_mask: (1, S, H, W) hoặc (B, S, H, W)
-        
+        # images: (B*S, C, H, W) hoặc (B, S, C, H, W)        
         # Cách unpack an toàn: lấy 4 giá trị cuối cùng
         # Điều này giúp code không crash dù images là 4D hay 5D
         # import logging
         # logging.basicConfig(level=logging.INFO)
 
         # logging.info(f"Hello") 
-        import logging
-        logging.basicConfig(level=logging.INFO)
-
-        logging.info(f"2. {images.shape}")
         B, S, C, H, W = images.shape
+        B_S = B * S
 
-        print("1")
-        S_total = images.numel() // (C * H * W) 
-        print(S_total)
+        # fg_mask: (B*S, H, W)
+        B_S2, H2, W2 = fg_mask.shape
+        assert B_S2 == B_S, "fg_mask mismatch with images"
+
         # Ép fg_mask về đúng (S_total, H, W) để tính toán patch
         # dùng reshape thay vì view để an toàn hơn với bộ nhớ
-        fg_mask = fg_mask.reshape(S_total, H, W).float()
-        print("2")
-        ph, pw = H // self.patch_size, W // self.patch_size
+
+        ph, pw = H2 // self.patch_size, W2 // self.patch_size
 
         # Reshape pixel → patch (5D)
         # Đảm bảo H và W chia hết cho patch_size
         fg_mask = fg_mask.reshape(
-            S_total,
+            B_S2,
             ph,
             self.patch_size,
             pw,
             self.patch_size
         )
-        print("3")
-        # Pooling: Nếu bất kỳ pixel nào trong patch là vật thể (True), cả patch đó là 1
-        fg_mask = fg_mask.any(dim=(2, 4))  # Kết quả: (S_total, ph, pw)
-        print("4")
-        # Flatten patches thành sequence
-        fg_mask = fg_mask.reshape(S_total, -1)  # (S_total, P)
-        print("5")
+        fg_mask = fg_mask.permute(0, 1, 3, 2, 4)
+
+        # Pooling trong patch: nếu có 1 pixel foreground → patch = 1
+        fg_mask = fg_mask.any(dim=(-1, -2))  # (B*S, ph, pw)
+
+        # flatten patch grid → sequence
+        fg_mask = fg_mask.reshape(B_S, -1)  # (B*S, P)
+        
         # Tạo mask cho các special tokens (ví dụ: [CLS], register tokens)
         # self.patch_start_idx thường là số lượng special tokens
         special = torch.ones(
-            S_total,
+            B * S,
             self.patch_start_idx,
             device=fg_mask.device,
             dtype=fg_mask.dtype
         )
-        print('6')
         # Ghép lại thành mask hoàn chỉnh cho Attention
         attn_mask = torch.cat([special, fg_mask], dim=1)  # (S_total, P_total)
-        print('7')
         return attn_mask
     
     def forward(self, images: torch.Tensor, fg_mask: torch.Tensor) -> Tuple[List[torch.Tensor], int]:
@@ -256,12 +250,7 @@ class Aggregator(nn.Module):
 
         # Reshape to [B*S, C, H, W] for patch embedding
         images = images.view(B * S, C_in, H, W)
-        import logging
-        logging.basicConfig(level=logging.INFO)
-
-        logging.info(f"1. {images.shape}")
         patch_tokens = self.patch_embed(images)
-
 
         attn_mask = None
         if fg_mask is not None:
