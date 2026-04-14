@@ -68,6 +68,7 @@ def predictions_to_glb(
     if "Pointmap" in prediction_mode:
         print("Using Pointmap Branch")
         if "world_points" in predictions:
+            print("Using world_points")
             pred_world_points = predictions["world_points"]  # No batch dimension to remove
             pred_world_points_conf = predictions.get("world_points_conf", np.ones_like(pred_world_points[..., 0]))
         else:
