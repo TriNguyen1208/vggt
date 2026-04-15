@@ -24,7 +24,10 @@ def save_to_obj(
     show_cam=False,
     mask_sky=False,
     prediction_mode="Pointmap Regression",
+    is_fg_mask=False
 ):
+    if not is_fg_mask:
+        conf_thres = 30.0
     import os, time, gc
     import numpy as np
     import torch

@@ -84,10 +84,11 @@ def main():
     if "yolo" not in globals():
         yolo = YoloSegment()
         yolo.load_model()
+
     predictions = run_model(target_dir=args.path_dataset, model=model, yolo=yolo, device=device, is_fg_mask=args.fg_mask)
 
     if args.export_obj:
-        save_to_obj(predictions=predictions, obj_path=args.obj_path)
+        save_to_obj(predictions=predictions, obj_path=args.obj_path, is_fg_mask=args.fg_mask)
 
     if args.metrics:
         pass
