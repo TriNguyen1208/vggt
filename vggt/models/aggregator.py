@@ -181,57 +181,7 @@ class Aggregator(nn.Module):
             if hasattr(self.patch_embed, "mask_token"):
                 self.patch_embed.mask_token.requires_grad_(False)
 
-    def __get_mask_attention(self, images: torch.Tensor, fg_mask: torch.Tensor):
-        # # images: (B*S, C, H, W) hoặc (B, S, C, H, W)        
-        # # Cách unpack an toàn: lấy 4 giá trị cuối cùng
-        # # Điều này giúp code không crash dù images là 4D hay 5D
-        # # import logging
-        # # logging.basicConfig(level=logging.INFO)
-
-        # # logging.info(f"Hello") 
-        # B, S, C, H, W = images.shape
-        # B_S = B * S
-
-        # # fg_mask: (B*S, H, W)
-        # B_S2, H2, W2 = fg_mask.shape
-        # assert B_S2 == B_S, "fg_mask mismatch with images"
-
-        # # Ép fg_mask về đúng (S_total, H, W) để tính toán patch
-        # # dùng reshape thay vì view để an toàn hơn với bộ nhớ
-
-        # ph, pw = H2 // self.patch_size, W2 // self.patch_size
-
-        # # Reshape pixel → patch (5D)
-        # # Đảm bảo H và W chia hết cho patch_size
-        # fg_mask = fg_mask.reshape(
-        #     B_S2,
-        #     ph,
-        #     self.patch_size,
-        #     pw,
-        #     self.patch_size
-        # )
-        # fg_mask = fg_mask.permute(0, 1, 3, 2, 4)
-
-        # # Pooling trong patch: nếu có 1 pixel foreground → patch = 1
-        # fg_mask = fg_mask.any(dim=(-1, -2))  # (B*S, ph, pw)
-
-        # # flatten patch grid → sequence
-        # fg_mask = fg_mask.reshape(B_S, -1)  # (B*S, P)
-
-        # # Tạo mask cho các special tokens (ví dụ: [CLS], register tokens)
-        # # self.patch_start_idx thường là số lượng special tokens
-        # special = torch.ones(
-        #     B * S,
-        #     self.patch_start_idx,
-        #     device=fg_mask.device,
-        #     dtype=fg_mask.dtype
-        # )
-        # # Ghép lại thành mask hoàn chỉnh cho Attention
-        # attn_mask = torch.cat([special, fg_mask], dim=1)  # (S_total, P_total)
-        # return attn_mask
-        return None
-    
-    def forward(self, images: torch.Tensor, fg_mask: torch.Tensor) -> Tuple[List[torch.Tensor], int]:
+    def forward(self, images: torch.Tensor) -> Tuple[List[torch.Tensor], int]:
         """
         Args:
             images (torch.Tensor): Input images with shape [B, S, 3, H, W], in range [0, 1].
@@ -243,6 +193,7 @@ class Aggregator(nn.Module):
                 and the patch_start_idx indicating where patch tokens begin.
         """
         B, S, C_in, H, W = images.shape
+
         if C_in != 3:
             raise ValueError(f"Expected 3 input channels, got {C_in}")
 
@@ -252,10 +203,6 @@ class Aggregator(nn.Module):
         # Reshape to [B*S, C, H, W] for patch embedding
         images = images.view(B * S, C_in, H, W)
         patch_tokens = self.patch_embed(images)
-
-        attn_mask = None
-        if fg_mask is not None:
-            attn_mask = self.__get_mask_attention(images, fg_mask)
 
         if isinstance(patch_tokens, dict):
             patch_tokens = patch_tokens["x_norm_patchtokens"]
@@ -291,11 +238,11 @@ class Aggregator(nn.Module):
             for attn_type in self.aa_order:
                 if attn_type == "frame":
                     tokens, frame_idx, frame_intermediates = self._process_frame_attention(
-                        tokens, B, S, P, C, frame_idx, pos=pos, attn_mask=attn_mask
+                        tokens, B, S, P, C, frame_idx, pos=pos
                     )
                 elif attn_type == "global":
                     tokens, global_idx, global_intermediates = self._process_global_attention(
-                        tokens, B, S, P, C, global_idx, pos=pos, attn_mask=attn_mask
+                        tokens, B, S, P, C, global_idx, pos=pos
                     )
                 else:
                     raise ValueError(f"Unknown attention type: {attn_type}")
@@ -310,7 +257,7 @@ class Aggregator(nn.Module):
         del global_intermediates
         return output_list, self.patch_start_idx
 
-    def _process_frame_attention(self, tokens, B, S, P, C, frame_idx, pos=None, attn_mask=None):
+    def _process_frame_attention(self, tokens, B, S, P, C, frame_idx, pos=None):
         """
         Process frame attention blocks. We keep tokens in shape (B*S, P, C).
         """
@@ -328,16 +275,13 @@ class Aggregator(nn.Module):
             if self.training:
                 tokens = checkpoint(self.frame_blocks[frame_idx], tokens, pos, use_reentrant=self.use_reentrant)
             else:
-                if attn_mask is not None:
-                    tokens = self.frame_blocks[frame_idx](tokens, pos=pos, attn_mask=attn_mask)
-                else:
-                    tokens = self.frame_blocks[frame_idx](tokens, pos=pos)
+                tokens = self.frame_blocks[frame_idx](tokens, pos=pos)
             frame_idx += 1
             intermediates.append(tokens.view(B, S, P, C))
 
         return tokens, frame_idx, intermediates
 
-    def _process_global_attention(self, tokens, B, S, P, C, global_idx, pos=None, attn_mask=None):
+    def _process_global_attention(self, tokens, B, S, P, C, global_idx, pos=None):
         """
         Process global attention blocks. We keep tokens in shape (B, S*P, C).
         """
@@ -352,12 +296,9 @@ class Aggregator(nn.Module):
         # by default, self.aa_block_size=1, which processes one block at a time
         for _ in range(self.aa_block_size):
             if self.training:
-                tokens = checkpoint(self.global_blocks[global_idx], tokens, pos, use_reentrant=self.use_reentrant, attn_mask = attn_mask)
+                tokens = checkpoint(self.global_blocks[global_idx], tokens, pos, use_reentrant=self.use_reentrant)
             else:
-                if attn_mask is not None:
-                    tokens = self.global_blocks[global_idx](tokens, pos=pos, attn_mask=attn_mask)
-                else:
-                    tokens = self.global_blocks[global_idx](tokens, pos=pos)
+                tokens = self.global_blocks[global_idx](tokens, pos=pos)
             global_idx += 1
             intermediates.append(tokens.view(B, S, P, C))
 

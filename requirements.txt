@@ -5,3 +5,8 @@ Pillow
 huggingface_hub
 einops
 safetensors
+ultralytics
+trimesh
+opencv-python
+matplotlib
+tqdm
