@@ -73,7 +73,7 @@ def run_model(target_dir, model, yolo, device, is_fg_mask=True) -> dict:
             predictions["world_points_conf"] = predictions["world_points_conf"] * mask_np
     else:
         predictions["world_points_from_depth"] = world_points
-    predictions["images"] = images
+    predictions["images"] = images.cpu().numpy()
     torch.cuda.empty_cache()
     
     return predictions
