@@ -20,7 +20,7 @@ def run_model(target_dir, model, yolo, device, is_fg_mask=True) -> dict:
 
     images = load_and_preprocess_images(image_names).to(device)
 
-    if yolo is not None and is_fg_mask is not None:
+    if yolo is not None and is_fg_mask:
         fg_mask, images = yolo.process_and_blend_images(images)
     else:
         fg_mask = None
@@ -36,8 +36,7 @@ def run_model(target_dir, model, yolo, device, is_fg_mask=True) -> dict:
     extrinsic, intrinsic = pose_encoding_to_extri_intri(
         predictions["pose_enc"], images.shape[-2:]
     )
-    
-    predictions["images"] = images
+
     predictions["extrinsic"] = extrinsic
     predictions["intrinsic"] = intrinsic
 
@@ -46,7 +45,9 @@ def run_model(target_dir, model, yolo, device, is_fg_mask=True) -> dict:
 
     # Convert tensors → numpy, remove batch dim
     skip_keys = {"pose_enc_list"}
+
     for key in list(predictions.keys()):
+        print(key)
         if key in skip_keys:
             predictions[key] = None
             continue
