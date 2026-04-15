@@ -6,7 +6,7 @@ from vggt.utils.pose_enc import pose_encoding_to_extri_intri
 from vggt.utils.geometry import unproject_depth_map_to_point_map
 import numpy as np
 
-def run_model(target_dir, model, yolo, device) -> dict:
+def run_model(target_dir, model, yolo, device, is_fg_mask=True) -> dict:
     """
     Run VGGT on frame_*.jpg images directly in target_dir.
     Model should already be on device and in eval mode before calling this.
@@ -20,7 +20,7 @@ def run_model(target_dir, model, yolo, device) -> dict:
 
     images = load_and_preprocess_images(image_names).to(device)
 
-    if yolo is not None:
+    if yolo is not None and is_fg_mask is not None:
         fg_mask, images = yolo.process_and_blend_images(images)
     else:
         fg_mask = None
