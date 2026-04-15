@@ -36,6 +36,8 @@ def run_model(target_dir, model, yolo, device, is_fg_mask=True) -> dict:
     extrinsic, intrinsic = pose_encoding_to_extri_intri(
         predictions["pose_enc"], images.shape[-2:]
     )
+    
+    predictions["images"] = images
     predictions["extrinsic"] = extrinsic
     predictions["intrinsic"] = intrinsic
 
@@ -53,7 +55,7 @@ def run_model(target_dir, model, yolo, device, is_fg_mask=True) -> dict:
 
     # World points from depth
     depth_map = predictions["depth"]  # [S, H, W, 1]
-
+    
     world_points = unproject_depth_map_to_point_map(
         depth_map, predictions["extrinsic"], predictions["intrinsic"]
     )
